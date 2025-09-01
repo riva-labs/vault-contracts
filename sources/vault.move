@@ -3,8 +3,7 @@ module vault::vault;
 
 // === Imports ===
 
-use std::ascii;
-use std::string;
+use std::string::String;
 use std::u64::pow;
 use sui::balance::{Self, Balance};
 use sui::coin::{Coin, TreasuryCap};
@@ -45,9 +44,9 @@ public struct Vault<phantom InputCoin, phantom OutputCoin> has key, store {
 /// Metadata for the vault containing display information
 public struct VaultMetadata<phantom InputCoin, phantom OutputCoin> has key, store {
     id: UID,
-    name: string::String,
-    symbol: ascii::String,
-    description: string::String,
+    name: String,
+    symbol: String,
+    description: String,
     icon_url: Option<Url>,
 }
 
@@ -248,7 +247,7 @@ public(package) fun create_vault_metadata_inner<InputCoin, OutputCoin>(
     VaultMetadata<InputCoin, OutputCoin> {
         id: object::new(ctx),
         name: name.to_string(),
-        symbol: symbol.to_ascii_string(),
+        symbol: symbol.to_string(),
         description: description.to_string(),
         icon_url,
     }
