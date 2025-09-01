@@ -10,6 +10,8 @@ use sui::coin::{Coin, TreasuryCap};
 use sui::dynamic_object_field as dof;
 use sui::url::Url;
 
+// === Constants ===
+const MAX_U64: u128 = 18446744073709551615;
 
 // === Error Constants ===
 
@@ -38,8 +40,6 @@ public struct Vault<phantom InputCoin, phantom OutputCoin> has key, store {
     /// Decimals of the rate
     rate_decimals: u8,
 }
-
-// Multiple InputCoins inside of a Bag
 
 /// Metadata for the vault containing display information
 public struct VaultMetadata<phantom InputCoin, phantom OutputCoin> has key, store {
@@ -107,7 +107,6 @@ public fun deposit<InputCoin, OutputCoin>(
     amount: Coin<InputCoin>,
 ) {
     assert_owner_cap_matches(vault, owner_cap);
-
     vault.reserve.join(amount.into_balance());
 }
 
@@ -121,7 +120,6 @@ public fun withdraw<InputCoin, OutputCoin>(
 ): Coin<InputCoin> {
     assert_owner_cap_matches(vault, owner_cap);
     assert!(vault.reserve.value() >= amount, EInsufficientReserves);
-
     vault.reserve.split(amount).into_coin(ctx)
 }
 
@@ -134,7 +132,6 @@ public fun set_rate<InputCoin, OutputCoin>(
 ) {
     assert_owner_cap_matches(vault, owner_cap);
     assert!(rate > 0, EInvalidRate);
-
     vault.rate = rate;
 }
 
@@ -156,7 +153,6 @@ public fun mint<InputCoin, OutputCoin>(
         input_value,
         vault.rate_decimals,
     );
-
 
     vault.reserve.join(input_coin.into_balance());
     
@@ -183,12 +179,10 @@ public fun redeem<InputCoin, OutputCoin>(
         vault.rate_decimals,
     );
     
-    // Check sufficient reserves
     assert!(vault.reserve.value() >= input_amount, EInsufficientReserves);
 
     let input_coin = vault.reserve.split(input_amount).into_coin(ctx);
     
-    // Burn the output coin (external call)
     dof::borrow_mut<ID, TreasuryCap<OutputCoin>>(
         &mut vault.id,
         vault_metadata.id.to_inner(),
@@ -265,11 +259,14 @@ public(package) fun calculate_output_amount_safe(
     let divisor = pow(10, rate_decimals);
     assert!(divisor > 0, EDivisionByZero);
     
-    // Check for multiplication overflow: rate * input_value <= u64::MAX
-    let max_input = 18446744073709551615u64 / rate; // u64::MAX / rate
-    assert!(input_value <= max_input, EArithmeticOverflow);
+    let rate_u128 = (rate as u128);
+    let input_value_u128 = (input_value as u128);
+    let divisor_u128 = (divisor as u128);
     
-    (rate * input_value) / divisor
+    let result_u128 = (rate_u128 * input_value_u128) / divisor_u128;
+    assert!(result_u128 <= MAX_U64, EArithmeticOverflow);
+    
+    (result_u128 as u64)
 }
 
 /// Calculates required input coin amount with overflow protection
@@ -281,12 +278,23 @@ public(package) fun calculate_input_amount_safe(
     assert!(rate > 0, EDivisionByZero);
     
     let multiplier = pow(10, rate_decimals);
+    let output_value_u128 = (output_value as u128);
+    let multiplier_u128 = (multiplier as u128);
+    let rate_u128 = (rate as u128);
     
-    // Check for multiplication overflow: output_value * multiplier <= u64::MAX
-    let max_output = 18446744073709551615u64 / multiplier; // u64::MAX / multiplier
-    assert!(output_value <= max_output, EArithmeticOverflow);
+    let numerator = output_value_u128 * multiplier_u128;
+    let result_u128 = numerator / rate_u128;
     
-    (output_value * multiplier) / rate
+    assert!(result_u128 <= MAX_U64, EArithmeticOverflow);
+    
+    let remainder = numerator % rate_u128;
+    if (remainder > 0) {
+        let final_result = result_u128 + 1;
+        assert!(final_result <= MAX_U64, EArithmeticOverflow);
+        (final_result as u64)
+    } else {
+        (result_u128 as u64)
+    }
 }
 
 // === Private Functions ===

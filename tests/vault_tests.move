@@ -536,16 +536,16 @@ fun test_rounding_behavior() {
 fun test_overflow_protection_mint_fails() {
     let mut scenario = setup(test::begin(ADMIN));
     
-    // Create vault with maximum rate to trigger overflow
+    // Create vault with maximum rate to trigger balance overflow during mint
     next_tx(&mut scenario, ADMIN);
     {
         let input_treasury = coin::create_treasury_cap_for_testing<INPUT_COIN>(scenario.ctx());
         let output_treasury = coin::create_treasury_cap_for_testing<OUTPUT_COIN>(scenario.ctx());
         
         vault::create_vault<INPUT_COIN, OUTPUT_COIN>(
-            18446744073709551615u64, // u64::MAX - will cause overflow
+            18446744073709551615u64, // u64::MAX rate
             output_treasury,
-            1, // Low decimals to maximize overflow risk
+            0, // No decimals to maximize mint amount
             b"OVERFLOW",
             b"Overflow Test Vault",
             b"Security test vault",
@@ -556,14 +556,14 @@ fun test_overflow_protection_mint_fails() {
         transfer::public_transfer(input_treasury, ADMIN);
     };
     
-    // Attempt mint that causes arithmetic overflow - MUST FAIL
-    mint_input_coins_for_user(&mut scenario, USER, 10);
+    // Attempt mint with large amount that causes balance overflow - MUST FAIL
+    mint_input_coins_for_user(&mut scenario, USER, 10000000000u64);
     next_tx(&mut scenario, USER);
     {
         let (mut vault, vault_metadata) = take_vault_objects(&scenario);
         let input_coin = test::take_from_sender<Coin<INPUT_COIN>>(&scenario);
         
-        // This MUST fail with EArithmeticOverflow to protect $100B+
+        // This MUST fail with EArithmeticOverflow when result > u64::MAX
         let output_coin = vault::mint(&mut vault, &vault_metadata, input_coin, ctx(&mut scenario));
         
         transfer::public_transfer(output_coin, USER);
@@ -578,10 +578,10 @@ fun test_overflow_protection_mint_fails() {
 fun test_overflow_protection_redeem_fails() {
     // Direct test of safe calculation function with overflow values
     let rate = 1000000000u64; // 1 billion
-    let output_value = 1000000000000000000u64; // Values that cause overflow
+    let output_value = 1000000000000000000u64; // Values that cause u64 overflow
     let rate_decimals = 18u8; // 10^18 multiplier causes overflow
     
-    // This MUST fail with EArithmeticOverflow - critical for production safety
+    // This MUST fail with EArithmeticOverflow when result > u64::MAX
     vault::calculate_input_amount_safe(rate, output_value, rate_decimals);
 }
 
