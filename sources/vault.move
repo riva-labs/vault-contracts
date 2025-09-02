@@ -1,3 +1,6 @@
+// Copyright (c) Riva Labs.
+// SPDX-License-Identifier: CC BY 4.0
+
 /// Vault module for swapping between InputCoin and OutputCoin with configurable rates
 module vault::vault;
 
